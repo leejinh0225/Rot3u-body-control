@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; style-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'">
+  <title>몸동작 조종 · 가상 팔과 ROT3U</title>
+  <link rel="stylesheet" href="./style.css?v=heading-9">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./"><span class="brand-mark">↗</span> BODY / ARM <small>상반신 조종 실험실</small></a>
+  <div class="top-actions"><span class="virtual-badge" id="hardware-badge">VIRTUAL / 실물 출력 OFF</span><a href="../viewer/" target="_blank" rel="noopener">서보 테스트 화면 ↗</a></div>
+</header>
+<main>
+  <section class="intro">
+    <div><div class="eyebrow">03 / 회전하고, 뻗고, 옮기는 연습</div><h1>내 몸으로 움직이는,<br class="mobile-break"> 하나의 기계팔.</h1><p>제자리에서 몸을 돌려 베이스 회전. 다리는 보이면 따라가고, 안 보이면 90°로 가정합니다.</p></div>
+    <ol class="steps"><li><b>1</b>카메라 켜기</li><li><b>2</b>팔 펴고 3초</li><li><b>3</b>자동 시작</li></ol>
+  </section>
+  <div class="workspace">
+    <section class="panel arm-panel" aria-labelledby="arm-title">
+      <div class="panel-head"><div><span class="eyebrow">VIRTUAL ARM</span><h2 id="arm-title">나의 움직임, 기계의 움직임</h2></div><span class="status" id="motion-badge">대기 중</span></div>
+      <div id="stage"><div class="stage-label">설명용 모델 · 실물 측정 자세 아님</div><div class="view-buttons" aria-label="보기 방향"><button data-view="0" class="active">입체</button><button data-view="1">옆모습</button><button data-view="2">끝에서</button></div><div class="stage-caption">다리(안 보이면 90°) → 몸통 → 양팔 → 스쿱</div></div>
+      <div class="telemetry">
+        <div><span>베이스 회전</span><strong id="yaw-value">0°</strong></div>
+        <div><span>다리 기울기</span><strong id="leg-value">90°</strong></div>
+        <div><span>몸통 기울기</span><strong id="torso-value">90°</strong></div>
+        <div><span>양팔 기울기</span><strong id="arm-value">90°</strong></div>
+        <div><span>가상 손끝 높이</span><strong id="height-value">75 cm</strong></div>
+      </div>
+      <p class="subtle" id="reach-status">과자와 트레이는 배치 예시입니다. 접촉·퍼 담기는 아직 시뮬레이션하지 않습니다.</p>
+      <div class="control-row"><button id="auto-rearm" class="primary" disabled>자동 시작 대기</button><button id="pause">일시정지 <kbd>Space</kbd></button><button id="engage" disabled>수동 시작</button><button id="reset" class="quiet">처음 자세로</button></div>
+    </section>
+    <section class="panel camera-panel" aria-labelledby="camera-title">
+      <div class="panel-head"><div><span class="eyebrow">YOUR BODY</span><h2 id="camera-title">카메라 속 내 자세</h2></div><span class="status" id="tracking-badge">카메라 꺼짐</span></div>
+      <div class="camera-frame">
+        <video id="camera" autoplay muted playsinline></video><canvas id="skeleton" width="640" height="480"></canvas>
+        <div id="camera-placeholder"><div class="person-symbol">●<br>├──<br>│</div><strong>양쪽 어깨와 앞으로 뻗은 팔을 보여주십시오</strong><span>카메라를 수평으로 두고 비스듬히 서십시오.<br>회전 고정 모드에서는 한쪽 팔만 보여도 됩니다.</span></div>
+        <div id="countdown" hidden></div><span class="mirror-label">거울 화면</span><span id="demo-label" hidden>합성 자세 · 카메라 아님</span>
+      </div>
+      <div class="base-controls">
+        <label for="base-mode">베이스 조종</label>
+        <select id="base-mode"><option value="heading">몸 방향으로 회전 · 3D 시험</option><option value="fixed">회전 고정 · 측면 2D</option></select>
+        <div class="base-options"><label for="base-gain">회전 감도 <output id="base-gain-value">1.5배</output></label><input id="base-gain" type="range" min=".5" max="3" step=".1" value="1.5"><label class="checkbox"><input type="checkbox" id="base-reverse">회전 반전</label></div>
+        <p id="base-readout" class="message" role="status">양쪽 어깨의 3D 방향을 기다립니다.</p>
+        <p id="fps" class="subtle">—</p>
+        <p class="subtle">거울 화면 오른쪽 45° = 베이스 중앙 · 정면 0° · 최대 ±60°. 처음 잡힌 방향과 관계없이 이 기준을 유지합니다. 0.8초 이내 인식 끊김은 움직임만 멈추고 바로 이어갑니다.</p>
+      </div>
+      <section class="hardware-live" id="hw-live" aria-labelledby="hw-live-title">
+        <div class="hardware-live-head"><strong id="hw-live-title">실물 로봇 조작 · PWM 로그</strong><span id="hw-status" class="status">실물 미연결</span></div>
+        <p id="hw-follow-detail" class="message" role="status">실물 추종: USB 연결 전</p>
+        <p id="hw-message" class="subtle" role="status">카메라를 켜는 것만으로 실제 팔의 출력이 활성화되지는 않습니다.</p>
+        <p id="hw-command-status" class="subtle"></p>
+        <p id="hw-telemetry" class="pwm-log"></p>
+        <p id="hw-body-goal" class="pwm-log">첫 인식 자세부터 시뮬레이션과 같은 관절각을 목표로 합니다.</p>
+        <p id="hw-speed-status" class="subtle" role="status"></p>
+    <label class="hw-check"><input type="checkbox" id="hw-power-off">USB 연결·재설정·포트 동기화 중 서보 PSU가 꺼져 있습니다.</label>
+    <div class="control-row"><button id="hw-connect">Uno USB 연결</button><button id="hw-disconnect" disabled>USB 해제</button><button id="hw-remap" disabled>원점 파일의 PCA 포트 동기화</button></div>
+    <label class="hw-check"><input type="checkbox" id="hw-supported">팔을 받쳤고 원점 근처에 두었습니다. 최초 PWM 활성화는 현재 위치를 읽지 못하므로 별도로 움직일 수 있습니다.</label>
+    <p id="hw-arm-reason" class="message" role="status">원점 PWM: 장치와 설정을 확인하고 있습니다.</p>
+    <a class="subtle" href="#hw-settings-panel">원점 파일·임시 기본값 ↓</a>
+    <div class="control-row"><button id="hw-arm" class="primary" disabled>원점 PWM 켜기 · CH0~4</button><select id="hw-jog-channel" aria-label="실물 시험 채널"><option value="0">CH0 베이스</option><option value="1">CH1 어깨</option><option value="2">CH2 팔꿈치</option><option value="3">CH3 손목 굽힘</option><option value="4">CH4 손목 회전</option></select><button id="hw-jog-minus" disabled>−20µs 시험</button><button id="hw-jog-plus" disabled>+20µs 시험</button><button id="hw-jog-zero" disabled>선택 원점으로</button></div>
+    <label class="hw-check"><input type="checkbox" id="hw-direction-checked">채널 역할과 움직임 방향을 확인했습니다. 실제 카메라 입력만 실물로 전송합니다.</label>
+    <div class="control-row"><button id="hw-follow" class="primary" disabled>실물 추종 대기</button><button id="hw-freeze" disabled>이동 멈춤 · 힘 유지</button><button id="hw-park" disabled>원점 복귀 · 대기</button><button id="hw-park-off" disabled>원점 복귀 후 OFF</button><button id="hw-stop" class="danger" disabled>즉시 PWM OFF</button></div>
+
+      </section>
+      <div class="camera-controls">
+        <label for="device" class="small-label">카메라 선택</label><select id="device"><option value="">기본 카메라 · 권한 허용 후 장치 목록 표시</option></select>
+        <label class="auto-option"><input type="checkbox" id="auto-start" checked><span><b>인식되면 자동으로 자세 확인 후 시작</b><small>0.8초 이내 끊김은 대기 없이 재개 · 길게 끊기면 안정 확인 후 재개</small></span></label>
+        <div class="control-row"><button id="camera-start" class="primary">카메라 켜기</button><button id="camera-stop" disabled>카메라 끄기</button><button id="calibrate" disabled>수동 자세 확인</button></div>
+        <p id="tracking-help" class="message" role="status">카메라를 켜고 양팔을 앞으로 나란히 뻗으십시오. 자세가 3초간 안정되면 버튼 없이 바로 따라갑니다.</p>
+        <p id="pose-details" class="pose-details">하반신은 안 보이면 90° 가정 · 어깨와 손목이 보이면 작동합니다.</p>
+        <p class="subtle">영상은 이 기기 안에서 분석합니다. 녹화하거나 서버로 전송하지 않습니다.</p>
+      </div>
+    </section>
+  </div>
+  <section class="panel mapping-panel" aria-labelledby="mapping-title">
+    <div class="panel-head"><div><span class="eyebrow">ONE BODY / ONE ARM</span><h2 id="mapping-title">보이는 몸 구간을 연결합니다</h2></div><label class="mode-select">읽을 팔<select id="arm-mode"><option value="both">양팔 · 가림 자동 보완</option><option value="left">왼팔만</option><option value="right">오른팔만</option></select></label></div>
+    <div class="mapping-grid">
+      <article><span class="mapping-icon leg-color">01</span><div><h3>발목 → 골반</h3><p>보이면 다리 기울기도 반영합니다.<br>안 보이면 수직 90°로 돌아갑니다.</p></div></article>
+      <article><span class="mapping-icon torso-color">02</span><div><h3>허리 → 어깨</h3><p>허리까지 보이면 숙임을 따라갑니다.<br>허리가 안 보이면 몸통도 90°로 가정합니다.</p></div></article>
+      <article><span class="mapping-icon arm-color">03</span><div><h3>어깨 → 나란히 뻗은 양손</h3><p>양팔이 하나의 끝 링크입니다.<br>손끝에 스쿱이 있다고 생각하십시오.</p></div></article>
+    </div>
+    <div class="tuning"><label class="checkbox"><input type="checkbox" id="reverse">팔 방향 반전</label><span>몸 방향 3D 모드는 회전과 굽힘을 분리합니다. 웹캠 추정값이며 실제 깊이 측정이 아닙니다.</span></div>
+  </section>
+  <div class="bottom-grid">
+    <section class="help-card"><h3>혼자서도 카메라 앞에 가기만 하면</h3><p>처음에는 양팔을 앞으로 뻗고 3초간 멈추면 시작합니다. 0.8초 이내 끊김은 즉시 이어가며, 길게 끊긴 뒤에는 0.6초간 자세를 확인합니다. 실물은 긴 끊김 후 별도로 1.8초 안정 대기를 거칩니다. <kbd>Space</kbd> / <kbd>Esc</kbd>로 직접 멈추면 자동 재개도 멈춥니다.</p><p class="subtle">몸 방향의 중앙은 거울 화면 오른쪽 45°입니다. 다른 방향에서 시작해도 회전 기준은 바뀌지 않습니다. 작은 제자리 회전으로 과자 트레이와 옆 그릇을 오가도록 시험하십시오. 완전한 옆모습에서 어깨가 겹치면 회전 고정 모드로 앞뒤 퍼 담기를 할 수 있습니다. 모드를 바꾸면 방향을 다시 잡고 실물 추종 대기도 다시 시작합니다.</p><div class="engine-row"><span id="engine-status">인식 엔진: 준비 전</span><button id="engine-check" class="quiet">인식 엔진만 확인</button></div></section>
+    <details class="demo-panel"><summary>카메라 없이 동작·충돌 시험하기 <span>DEMO</span></summary><p class="subtle">합성 자세는 실제 팔에 전송되지 않습니다. 모델의 충돌 경계에서 가상 팔이 멈추는지 확인할 수 있습니다.</p><div class="control-row"><button id="demo-start">합성 자세 연습</button><button id="demo-loss">인식 끊김 시험</button></div><div class="demo-sliders"><label>몸통 기울기<input id="demo-torso" type="range" min="0" max="160" step="1" value="90"></label><label>양팔 기울기<input id="demo-arm" type="range" min="-130" max="130" step="1" value="0"></label><label>다리 기울기<input id="demo-leg" type="range" min="30" max="150" step="1" value="90"></label><label>몸이 향하는 방향 °<input id="demo-heading" type="range" min="-75" max="75" step="1" value="45"></label><label>화면 좌우 위치 · 회전에 영향 없음<input id="demo-shift" type="range" min="-.18" max=".18" step=".01" value="0"></label></div><div class="demo-options"><label><input type="checkbox" id="demo-legs">다리도 보임</label><label><input type="checkbox" id="demo-no-hips">허리도 화면 밖</label><label><input type="checkbox" id="demo-side">반대쪽 팔 가림</label></div></details>
+  </div>
+<section class="panel hardware-panel" id="hw-settings-panel">
+  <div class="panel-head"><div><span class="eyebrow">REAL ARM / CH0–4</span><h2>실물 원점·치수 설정</h2></div><a class="subtle" href="#hw-live">실물 조작·PWM 로그로 ↑</a></div>
+  <div class="hardware-content">
+    <p class="message">저장 원점 = 위로 쭉 편 대기 자세. CH0~4만 사용하고 CH5는 OFF입니다. 새 <a href="../firmware/ArmBench/ArmBench.ino" download>ArmBench.ino</a>를 업로드한 뒤 연결하십시오. 기존 서보 벤치의 USB는 먼저 해제합니다.</p>
+    <p id="hw-profile-summary" class="subtle">실물 원점 기록을 기다립니다.</p>
+    <div class="control-row"><label class="file-label">원점 JSON <input type="file" id="hw-profile-file" accept=".json,application/json"></label><button id="hw-load-browser">브라우저 원점 불러오기</button><button id="hw-export-config">실물 설정 저장</button><label class="file-label">설정 불러오기 <input id="hw-import-config" type="file" accept=".json,application/json"></label></div>
+    <details class="hw-settings"><summary>임시 기본값 · 필요할 때만 조정</summary>
+      <p>링크 105·100·70mm, 스쿱 없음, 위로 편 원점으로 미리 채웠습니다. 측정값이 아닌 간단한 동작 시험용 가정입니다. <button id="hw-reference">임시 기본값 다시 넣기</button></p>
+      <p class="subtle">베이스와 간격도 작은 임시값을 적용했습니다. 이 값으로 시작할 수 있으며 실측 확인은 요구하지 않습니다. <a href="./DIMENSIONS.md" target="_blank">참고 치수 출처 ↗</a></p>
+      <div class="hw-geometry">
+        <label>어깨→팔꿈치 mm<input id="hw-l1" type="number" min="30" max="600" value="105"></label>
+        <label>팔꿈치→손목 굽힘 mm<input id="hw-l2" type="number" min="30" max="600" value="100"></label>
+        <label>손목→도구 부착점 mm<input id="hw-l3" type="number" min="30" max="600" value="70"></label>
+        <label>추가 도구 길이 mm · 현재 없음<input id="hw-tool" type="number" min="0" max="250" value="0"></label>
+        <label>어깨 높이 mm · 임시값<input id="hw-base-height" type="number" min="30" max="300" value="110"></label>
+        <label>베이스 반경 mm · 최소 임시값<input id="hw-base-radius" type="number" min="20" max="250" value="20"></label>
+        <label>충돌 반경 mm · 최소 고정<input id="hw-radius" type="number" value="10" readonly></label>
+        <label>추가 간격 mm · 최소 고정<input id="hw-margin" type="number" value="10" readonly></label>
+        <label>원점 어깨 절대각 °<input id="hw-a1" type="number" min="-180" max="180" value="90"></label>
+        <label>원점 팔꿈치 상대각 °<input id="hw-a2" type="number" min="-180" max="180" value="0"></label>
+        <label>원점 손목 상대각 °<input id="hw-a3" type="number" min="-180" max="180" value="0"></label>
+      </div>
+      <p class="subtle">최소 충돌 검사: 반경 10mm + 여유 10mm 고정. 실제 두꺼운 부품·스쿱 외형은 포함하지 않습니다. 링크 길이·베이스도 임시값이므로 실제 접촉을 보장하여 방지하지 않습니다.</p>
+      <div class="table-scroll"><table class="hw-table"><thead><tr><th>역할</th><th>논리 채널</th><th>방향</th><th>µs/°</th><th>동작 배율</th><th>원점 ±µs</th></tr></thead><tbody id="hw-mapping"></tbody></table></div>
+      <p class="subtle">절대 조종 · 기본 배율 1배 · 원점 ±1000µs(환산상 약 ±90°), 장치 명령 범위 500~2500µs. 범위를 벗어나는 관절은 PWM 로그에 표시합니다. 손목 회전은 고정합니다. 11.111µs/°는 명령각 환산 가정으로 실제 각도 센서값이 아닙니다.</p>
+    </details>
+    <p class="subtle">추종 대기 이유와 이동 명령 수신 여부는 <a href="#hw-live">카메라 바로 아래 실물 조작·PWM 로그</a>에서 확인할 수 있습니다.</p>
+    <p class="subtle">새 ArmBench 업로드 후 상한 1,200µs/초(20% 증가), 작은 목표 도착 응답은 즉시 전송합니다. 구형 스케치는 지원 기능에 따라 1,000 또는 100µs/초를 유지하며 업로드 안내가 표시됩니다. 인식이 끊기면 현재 PWM을 유지합니다. MOVE가 350ms 끊기면 펌웨어가 목표 변경을 멈춥니다. 통신 전체가 2초 끊기면 PWM OFF이며 팔이 처질 수 있습니다. 정상 종료에는 원점 복귀 후 OFF를 사용하십시오.</p>
+    <p class="subtle">충돌 검사는 작은 반경과 임시 치수로 최소한만 적용합니다. 가상 화면은 개념 모델이며 실제 팔의 측정 자세가 아닙니다. 카메라로 주변 물체를 자동 감지하지 않으며, 갑작스러운 전원 차단 시 원점 복귀는 불가능합니다.</p>
+  </div>
+</section>
+</main>
+<footer><b>BODY / ARM</b><span>카메라 영상 저장 없음 · 가상 연습과 실물 연결을 화면에서 구분합니다.</span></footer>
+<script type="module" src="./app.mjs?v=continuity-11"></script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROT3U · 서보 벤치</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div class="brand"><span class="mark">R / 6</span><div><span class="eyebrow">ROBOT ARM COMMISSIONING</span><h1>서보 벤치 <span>ROT3U</span></h1></div></div>
+<div class="connection"><span id="badge" class="badge">연결 안 됨</span><button id="connect" class="primary">USB 연결</button><button id="disconnect" disabled>연결 해제</button></div></header>
+<main>
+<p class="muted"><a href="../body-control/" target="_blank" rel="noopener">몸 전체로 가상 로봇팔 조종하기 ↗</a> · 내장 카메라로 연습 · 실제 서보에 명령을 보내지 않습니다.</p>
+<div class="intro"><div><h2>각도로 조정하고,<br>관절별 원점을 기록하십시오.</h2><p>Uno R3 · PCA9685 · MG996R × 6<br>4선 배선 그대로 · v4 범위 확장 / 명령각</p></div>
+<div class="facts"><div><b id="active-count">00</b><span>활성 채널 / 최대 6개</span></div><div><b>±500 <small>µs</small></b><span>기본 범위 · 관절별 확장 가능</span></div><div><b>2 <small>초</small></b><span>통신 끊김 → 전체 중지 요청</span></div></div></div>
+<div class="notice"><strong>4선 연결 · 저항 불필요</strong> Uno 5V→VCC, GND→GND, A4→SDA, A5→SCL. OE는 연결하지 않습니다. 업로드·리셋·USB 재연결 중에는 서보 PSU를 끄십시오.<br><strong>실제 각도 측정 화면이 아닙니다.</strong> 아래 값은 PWM 명령이며, 움직임은 실제 팔을 보며 확인하십시오. 관절 이름은 추정입니다.</div>
+<p id="diagnosis" class="diagnosis">먼저 ArmBench.ino를 Uno에 업로드하십시오. USB 연결은 자동 업로드가 아닙니다.</p>
+<div class="workspace"><section class="panel overview"><div class="section-head"><h3>채널 지도</h3><span>기구 배치 개념도</span></div>
+<svg viewBox="0 0 440 300" role="img" aria-label="CH0 베이스에서 CH5 그리퍼까지 이어지는 개념도. 실제 자세를 나타내지 않습니다.">
+<defs><pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M 25 0 L 0 0 0 25" fill="none" stroke="#e2e8e5" stroke-width="1"/></pattern></defs>
+<rect width="440" height="300" fill="url(#grid)" rx="16"/>
+<path d="M80 253 L80 207 L158 84 L300 103 L347 143 L367 157" fill="none" stroke="#b0bdb7" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M80 253 L80 207 L158 84 L300 103 L347 143 L367 157" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M357 169 L377 184 M377 150 L399 161" fill="none" stroke="#6f8178" stroke-width="9" stroke-linecap="round"/>
+<path d="M43 272 H117" stroke="#425c4e" stroke-width="14" stroke-linecap="round"/>
+<g class="joint" data-joint="0" transform="translate(80 253)"><circle r="15"/><text>0</text></g>
+<g class="joint" data-joint="1" transform="translate(80 207)"><circle r="15"/><text>1</text></g>
+<g class="joint" data-joint="2" transform="translate(158 84)"><circle r="15"/><text>2</text></g>
+<g class="joint" data-joint="3" transform="translate(300 103)"><circle r="15"/><text>3</text></g>
+<g class="joint" data-joint="4" transform="translate(347 143)"><circle r="15"/><text>4</text></g>
+<g class="joint" data-joint="5" transform="translate(384 170)"><circle r="15"/><text>5</text></g>
+<text x="20" y="28" fill="#62776b" font-size="12">선택 채널만 강조 · 실제 자세와 무관</text></svg>
+<div id="channels" class="channels"></div><p class="muted">채널을 선택해 조정해도 다른 활성 관절의 PWM은 유지됩니다.</p>
+<div class="hold-controls"><h3>여러 관절 함께 켜기</h3><label for="hold-mask">유지할 관절</label><select id="hold-mask"><option value="31">CH00~04 · CH05 제외</option><option value="63">CH00~05 · 전체 6개</option></select>
+<button id="hold" class="primary wide" disabled>1500µs로 함께 켜기</button><button id="hold-zero" class="wide" disabled>저장 원점으로 함께 켜기</button>
+<p class="muted">전체 출력 OFF + 팔 지지 확인 후 사용합니다. 저장 원점은 대상 관절을 모두 기록해야 켤 수 있습니다. 처음 켤 때 지정 자세로 움직이며, 현재 실물 자세를 읽어 잠그는 기능은 아닙니다. 5A 안에서 유지 가능한지는 PSU 전류·전압을 보며 확인하십시오.</p></div></section>
+<section class="panel control"><div class="section-head"><h3 id="selected-title">CH5 · 그리퍼</h3><span id="output-state">출력 꺼짐</span></div>
+<div class="readout"><span>현재 출력에 적용한 명령 · 실제 위치 아님</span><div><b id="applied">—</b><small>µs</small></div><p id="target-label">아두이노의 상태 응답을 기다립니다.</p><p id="angle-readout"></p></div>
+<div class="scale"><span id="scale-min">1000</span><div><i id="needle"></i></div><span id="scale-max">2000 µs</span></div>
+<label class="ack"><input type="checkbox" id="support"><span>팔 전체를 받쳤으며, 처음 켤 때 1500µs 또는 저장 원점 자세로 갑자기 움직일 수 있음을 확인했습니다.</span></label>
+<button class="primary wide" id="arm" disabled>선택 채널 켜기 · 1500µs</button>
+<div class="angle-controls"><h3>도 단위 조정 · 명령각</h3><div class="degree-jog"><button id="degree-minus5" disabled>−5°</button><button id="degree-minus1" disabled>−1°</button><button id="degree-plus1" disabled>+1°</button><button id="degree-plus5" disabled>+5°</button></div>
+<div class="exact"><label for="degree-input">목표 명령각 (°)</label><input id="degree-input" type="number" min="0" max="180" step="0.1" value="90" disabled><button id="degree-apply" disabled>각도 보내기</button></div>
+<p class="muted">0–180° ↔ 500–2500µs로 환산합니다. 1° ≈ 11.1µs. 이 눈금은 조작용 가정이며, 실제 서보·관절 각도는 실측 보정해야 합니다. 각도 입력도 아래 관절 한계를 따릅니다.</p></div>
+<div class="exact"><label for="pulse-step">펄스 조정 간격</label><select id="pulse-step"><option value="5">5µs</option><option value="10">10µs</option><option value="25" selected>25µs</option><option value="50">50µs</option></select></div>
+<div class="jog"><button id="minus" disabled>−25 µs</button><button id="center" disabled>1500µs로</button><button id="plus" disabled>+25 µs</button></div>
+<div class="exact"><label for="pulse">목표 펄스 (µs)</label><input id="pulse" type="number" min="1000" max="2000" step="1" value="1500" disabled><button id="apply" disabled>보내기</button></div>
+<p class="muted">출력 명령은 약 100µs/초로 목표까지 이동합니다. 100µs 변경은 약 1초이며 첫 출력에는 적용되지 않습니다. PCA 1카운트 ≈ 4.88µs이므로 5µs는 거의 1단계입니다. 실제 움직임은 데드밴드·기어 유격·하중에 따라 다릅니다.</p>
+<button class="stop" id="stop">PWM 출력 중지 <kbd>Esc</kbd></button><p class="stop-note">팔이 처질 수 있습니다. 4선 방식은 I²C 단선 시 중지할 수 없으므로 PSU를 끄십시오.</p>
+<div class="hold-controls"><h3>관절별 조정 범위</h3><p id="joint-limits" class="muted">기본 1000–2000µs</p><div class="limit-inputs"><label>최소 펄스 (µs)<input id="limit-min" type="number" min="500" max="1500" step="1" value="1000" disabled></label><label>최대 펄스 (µs)<input id="limit-max" type="number" min="1500" max="2500" step="1" value="2000" disabled></label></div><button id="limit-apply" class="wide" disabled>선택 관절 범위 적용 · 전체 OFF에서</button><p class="muted">500–2500µs 안에서 시작값 1500µs를 포함하는 범위를 지정합니다. 숫자는 펄스 허용 범위이며 기구의 안전 가동범위가 아닙니다. 걸림 없이 확인한 구간만 조금씩 넓히십시오. 설정만으로 모터를 움직이지 않습니다. Uno 리셋 후 기본 1000–2000µs로 돌아오며 원점 파일 불러오기는 이 한계를 바꾸지 않습니다.</p></div>
+<div class="hold-controls"><h3>PCA 포트 바꾸기 · 선택한 CH 기준</h3><p id="map-current" class="muted">장치 연결 후 실제 매핑 표시</p>
+<label for="pca-port">실제 꽂을 PCA 번호</label><select id="pca-port"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option></select>
+<label class="ack"><input id="map-confirm" type="checkbox"><span>전체 PWM과 서보 PSU를 끄고, 선택한 관절의 플러그를 위 PCA 포트로 옮겼습니다.</span></label>
+<button id="map-apply" class="wide" disabled>선택 관절의 PCA 포트 적용</button><p class="muted">예: CH05 → PCA 6번. 관절 이름·원점은 CH05로 유지됩니다. 중복 포트는 거부합니다. 전원 리셋·업로드 후에는 기본 0~5 매핑으로 돌아오므로 다시 설정하십시오.</p></div>
+</section></div>
+<div id="message" role="status" aria-live="polite">전원을 넣기 전에 아래 배선 안내를 확인하십시오.</div>
+<section class="panel calibration"><div class="section-head"><h3>관절 원점 기록</h3><span id="profile-summary">실물 명령 기록 · 0/6개 원점 저장</span></div>
+<div class="details-grid"><div><table class="zero-table"><thead><tr><th>채널</th><th>원점 µs (1500 대비)</th></tr></thead><tbody><tr><td>CH00 · 베이스</td><td data-zero="0">미기록</td></tr><tr><td>CH01 · 어깨</td><td data-zero="1">미기록</td></tr><tr><td>CH02 · 팔꿈치</td><td data-zero="2">미기록</td></tr><tr><td>CH03 · 손목 굽힘</td><td data-zero="3">미기록</td></tr><tr><td>CH04 · 손목 회전</td><td data-zero="4">미기록</td></tr><tr><td>CH05 · 그리퍼</td><td data-zero="5">미기록</td></tr></tbody></table></div>
+<div><label for="zero-channel">기록할 관절</label><select id="zero-channel"><option value="0">CH00 · 베이스</option><option value="1">CH01 · 어깨</option><option value="2">CH02 · 팔꿈치</option><option value="3">CH03 · 손목 굽힘</option><option value="4">CH04 · 손목 회전</option><option value="5" selected>CH05 · 그리퍼</option></select>
+<h3 id="zero-readout">CH5 원점 미기록</h3><p id="zero-delta">원점은 명령 펄스값입니다.</p>
+<div class="zero-actions"><button id="zero-minus" disabled>원점 조정 −5µs</button><button id="zero-plus" disabled>원점 조정 +5µs</button><span id="zero-current" class="muted">현재 명령 —</span></div>
+<label for="zero-note">기준 자세·방향 메모</label><textarea id="zero-note" maxlength="1000" placeholder="예: 어깨 링크 수직, + 방향은 앞쪽. 정면 기준과 지지 상태를 함께 기록하십시오."></textarea>
+<div class="zero-actions"><button id="zero-record" class="primary" disabled>현재 명령을 원점으로 기록</button><button id="zero-go" disabled>이 관절 원점으로 이동</button><button id="zero-clear" disabled>이 관절 기록 지우기</button></div></div></div>
+<p class="muted">① 함께 켜기 → ② 관절 선택 후 도/µs 단위 조정 → ③ 실물 자세 확인 → ④ 원점 기록. 원점은 µs로 저장하며 기존 파일도 읽을 수 있습니다. 기록 버튼은 모터를 움직이지 않습니다. 기계적 수직·정렬은 눈금자·수평계 등으로 확인하십시오. 하중·유격은 원점 보정만으로 사라지지 않습니다. 기록은 같은 브라우저에 보관하며 아래 파일 저장으로도 남길 수 있습니다.</p>
+<div class="zero-actions"><button id="profile-export">원점 파일 저장</button><button id="profile-import">원점 파일 불러오기</button><input id="profile-file" type="file" accept=".json,application/json" hidden></div></section>
+<details class="panel troubleshooting"><summary>CH05만 움직이지 않을 때</summary><p>다른 관절이 동작하면 PCA 전체 고장으로 단정할 수 없습니다. 현재 로그에는 CH05의 1500→1550µs 명령이 있으므로, 간섭·소음이 없다면 1500에서 감소 방향도 작은 단계로 확인하십시오. 전체 가동범위를 자동으로 훑지는 않습니다.</p><ol><li>팔 전체를 받치고 PSU 출력을 끕니다. 3핀 방향, 한 칸 밀린 연결, 실물 CH5 인쇄를 확인합니다.</li><li>CH4·CH5에 꽂힌 서보 플러그를 서로 바꿉니다. 전원이 켜진 채 뽑거나 꽂지 마십시오.</li><li>한 채널 시험으로 비교합니다. 문제 서보가 CH4에서도 안 움직이면 서보·케이블·그리퍼 기구 쪽이 의심됩니다.</li><li>정상 서보도 CH5에서만 안 움직이면 CH5 헤더·납땜·PWM 출력 쪽이 의심됩니다. 단순 I²C 정상 응답은 채널 출력 파형을 보증하지 않습니다.</li><li>교차 시험 후 PSU OFF에서 원래 배선으로 돌립니다. 배선을 바꾼 채 원점 기록이나 함께 켜기를 사용하지 마십시오.</li></ol><p>사진만으로 혼 장착 오차와 설계상 각도를 구분할 수 없습니다. 심한 소음·걸림·발열·CC 표시가 있으면 PSU를 끄고 기구를 확인하십시오.</p></details>
+<details class="panel"><summary>배선과 첫 시험 순서</summary><div class="details-grid"><div><h3>Uno R3 → PCA9685 · 4개</h3><table><tr><td>5V / GND</td><td>VCC / GND</td></tr><tr><td>A4 / A5</td><td>SDA / SCL</td></tr><tr><td>OE / D7 / 저항</td><td>연결하지 않음</td></tr><tr><td>외부 PSU + / −</td><td>녹색 단자 V+ / GND</td></tr></table><p>서보: 노랑·주황 → PWM, 빨강 → V+, 갈색·검정 → GND. 기판 인쇄를 확인하십시오.</p></div><div><h3>최초 구동</h3><ol><li>PSU를 끄고 팔 전체를 지지합니다.</li><li>Arduino IDE에서 ArmBench.ino를 열고 Uno·COM 포트를 선택한 뒤 → 업로드합니다.</li><li>시리얼 모니터를 닫고 이 화면을 새로고침합니다.</li><li>USB 연결 후 「준비 · 출력 꺼짐」을 확인합니다.</li><li>PSU 5.0V, 첫 단독 시험 약 1–2A 제한으로 시작하고 CH5를 ±5µs씩 관찰합니다.</li></ol><p>CC 표시, 전압 강하, 심한 떨림·걸림이 생기면 즉시 PSU를 끄십시오. 코드에는 전류 센서가 없습니다.</p></div></div><p><a href="../README.md" target="_blank">전체 사용 안내서</a> · VCC와 V+를 연결하지 마십시오. PSU 주전원에는 짧고 굵은 전선을 사용하십시오.</p></details>
+<section class="panel log-panel"><div class="section-head"><h3>통신 기록</h3><div><button id="demo">연결 없이 화면 연습</button><button id="export">기록 저장</button><button id="retry" disabled>출력 끄고 통신 재확인</button></div></div><pre id="log" aria-label="통신 기록"></pre><label class="notes">관찰 메모<textarea id="notes" placeholder="예: CH5 = 그리퍼, + 방향에서 닫힘 / 1500µs에서 걸림 없음. 기록 저장에 포함됩니다."></textarea></label></section>
+<footer>LOCAL BENCH / v4 · ANGLE + LIMITS + ZERO <span>실제 각도·전류는 측정하지 않습니다. 명령각 눈금·관절 한계는 실물 보정이 필요합니다.</span></footer>
+</main><script type="module" src="app.mjs"></script></body></html>

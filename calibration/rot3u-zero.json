@@ -1,0 +1,52 @@
+{
+  "schema": "rot3u-zero-v1",
+  "name": "ROT3U 기준 자세",
+  "source": "hardware",
+  "units": "us",
+  "pcaChannels": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "channels": [
+    {
+      "ch": 0,
+      "zeroUs": 1523,
+      "recorded": true,
+      "note": ""
+    },
+    {
+      "ch": 1,
+      "zeroUs": 1677,
+      "recorded": true,
+      "note": ""
+    },
+    {
+      "ch": 2,
+      "zeroUs": 1611,
+      "recorded": true,
+      "note": ""
+    },
+    {
+      "ch": 3,
+      "zeroUs": 1500,
+      "recorded": true,
+      "note": ""
+    },
+    {
+      "ch": 4,
+      "zeroUs": 1612,
+      "recorded": true,
+      "note": ""
+    },
+    {
+      "ch": 5,
+      "zeroUs": 1500,
+      "recorded": false,
+      "note": ""
+    }
+  ]
+}
